@@ -17,14 +17,18 @@ public:
 	void update() override
 	{
 		if (Input::MouseL.clicked && Mouse::Pos().x < Window::Width() / 2)
+		{
 			changeScene(L"Server");
+		}
 		else if (Input::MouseL.clicked && Mouse::Pos().x > Window::Width() / 2)
+		{
 			changeScene(L"Client");
+		}
 	}
 
 	void draw() const override
 	{
-		Window::ClientRect().draw(Palette::Black);
+		Window::ClientRect().draw(Palette::Gray);
 		Rect(0,0,Window::Width()/2,Window::Height()).draw(Palette::Black);
 		font(L"Server/Client").drawCenter(Window::Center());
 	}
@@ -37,24 +41,49 @@ class Server : public SceneManager<String>::Scene
 public:
 	void init() override
 	{
-		server.startAccept(58620);
+		isReceived = vector<bool>(maxClients,false);
+		
+		for (int i = 0; i < maxClients; i++)
+		{
+			servers.push_back(TCPServer());
+			servers[i].startAccept(port);
+		}
 	}
 
 	void update() override
 	{
-		if (Input::MouseL.clicked)
-			changeScene(L"Title");
+		ClearPrint();
 
-		if (server.isConnected())
+		if (Input::MouseL.clicked)
 		{
-			while (server.read(receivedPoint));
+			changeScene(L"Title");
 		}
 
-		if (server.hasError())
-		{
-			server.disconnect();
+		Println(isReceived);
 
-			server.startAccept(58620);
+		for (int i = 0; i < maxClients; i++)
+		{
+			if (servers[i].isConnected())
+			{
+				if (servers[i].read(receivedPoint))
+				{
+					isReceived[i] = true;
+				}
+				else
+				{
+					isReceived[i] = false;
+				}
+			}
+			else
+			{
+				isReceived[i] = false;
+			}
+
+			if (servers[i].hasError())
+			{
+				servers[i].disconnect();
+				servers[i].startAccept(port);
+			}
 		}
 
 	}
@@ -62,14 +91,26 @@ public:
 	void draw() const override
 	{
 		Window::ClientRect().draw(Palette::Black);
+		
 		font(L"Server").drawCenter(Window::Center());
 
-		Circle(receivedPoint, 10).draw(Palette::Orange);
+		for (int i = 0; i < maxClients; i++)
+		{
+			if (isReceived[i] == true)
+			{
+				Circle(receivedPoint, 10).draw(Palette::Orange);
+			}
+		}
 	}
 
 	Font font{ 50 };
 
-	TCPServer server;
+	vector<TCPServer> servers;
+
+	const uint8 port = 58620;
+
+	vector<bool> isReceived;
+	const int maxClients = 10;
 
 	Point receivedPoint;
 };
@@ -85,14 +126,15 @@ public:
 		client.connect(IPv4(FromString<int>(sstr[0], 10), 
 							FromString<int>(sstr[1], 10), 
 							FromString<int>(sstr[2], 10), 
-							FromString<int>(sstr[3], 10)), 58620);
+							FromString<int>(sstr[3], 10)), port);
 	}
 
 	void update() override
 	{
 		if (Input::MouseL.clicked)
+		{
 			changeScene(L"Title");
-
+		}
 
 		if (client.isConnected())
 		{
@@ -103,7 +145,7 @@ public:
 		{
 			client.disconnect();
 
-			client.connect(IPv4::localhost(), 58620);
+			client.connect(IPv4::localhost(), port);
 		}
 
 	}
@@ -117,6 +159,8 @@ public:
 	Font font{ 50 };
 
 	TCPClient client;
+
+	const uint8 port = 58620;
 	
 };
 
